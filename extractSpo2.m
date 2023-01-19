@@ -1,4 +1,9 @@
 function pat = extractSpo2
+%Extracts SpO2 Data from MIMIC-IV database on physionet. This is done by
+%location all relevant CSV file, dowloading and extracting them, and
+%finally loading them into one big struct for rapid analysis
+%
+% Elie Sarraf, Jan 19 2023
 siteLink = 'https://physionet.org/files/mimic4wdb/0.1.0/';
 lines = readlines(strcat(siteLink,'RECORDS'));
 lines = lines(~cellfun(@isempty,lines));
