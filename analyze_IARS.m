@@ -3,6 +3,7 @@
 % from the MIMIC-IV database and the main table with the added errors have
 % been created.
 %
+% 2/8/2022 Code optimzation
 % Elie Sarraf, Jan 19 2023
 
 
@@ -19,25 +20,21 @@ std_result = ARMS_result;
 ARMS_diff_source = nan(4,1);
 mean_diff_source = nan(4,1);
 std_diff_source = nan(4,1);
+BA_result = nan(4,8);
 for val = 3:6
     logic_force = tableM{:,val}<=95 & tableM{:,val}>=75;
-    [ARMS_result(val-2,:), mean_result(val-2,:), std_result(val-2,:)] = ARMS_now(tableM{logic_force,7:end}, tableM{logic_force,val});
-    [ARMS_diff_source(val-2), mean_diff_source(val-2), std_diff_source(val-2)] = ARMS_now(tableM{logic_force,3}, tableM{logic_force,val});
+    table_val = tableM(logic_force,:);
+
+    [ARMS_result(val-2,:), mean_result(val-2,:), std_result(val-2,:)] = ARMS_now(table_val{:,7:end}, table_val{:,val});
+    [ARMS_diff_source(val-2), mean_diff_source(val-2), std_diff_source(val-2)] = ARMS_now(table_val{:,3}, table_val{:,val});
+    % Repeated Measures Bland Altman plot
+    BA_result(val-2,:) = -diff(vertcat(arrayfun(@(val1) build_ba(table_val, val, val1, 2),7:14).loa),1,2)';
 end
 
 ARMS_print = sprintfc('%0.2f',[ARMS_diff_source ARMS_result]);
 mean_print = sprintfc('(%0.2f, ',[mean_diff_source mean_result]);
 std_print = sprintfc('%0.2f)',[std_diff_source std_result]);
 total_print = strcat(ARMS_print,mean_print,std_print);
-
-% Repeated Measures Bland Altman plot:
-logic_force_BA = tableM.Bias_1<=95 & tableM.Bias_1>=75;
-table_BA = tableM(logic_force_BA,:);
-
-BA_result = [-diff(vertcat(arrayfun(@(val) build_ba(table_BA, 3, val, 1),7:14).loa),1,2)';
-    -diff(vertcat(arrayfun(@(val) build_ba(table_BA, 4, val, 1),7:14).loa),1,2)';
-    -diff(vertcat(arrayfun(@(val) build_ba(table_BA, 5, val, 1),7:14).loa),1,2)';
-    -diff(vertcat(arrayfun(@(val) build_ba(table_BA, 6, val, 1),7:14).loa),1,2)'];
 
 % Sees if caclulated values increase a fct of log(time)
 
