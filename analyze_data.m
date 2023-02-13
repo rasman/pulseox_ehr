@@ -3,6 +3,7 @@
 % from the MIMIC-IV database and the main table with the added errors have
 % been created.
 %
+% 2/8/2022 Code optimzation
 % Elie Sarraf, Jan 19 2023
 
 
@@ -19,10 +20,15 @@ std_result = ARMS_result;
 ARMS_diff_source = nan(4,1);
 mean_diff_source = nan(4,1);
 std_diff_source = nan(4,1);
+BA_result = nan(4,8);
 for val = 3:6
     logic_force = tableM{:,val}<=95 & tableM{:,val}>=75;
-    [ARMS_result(val-2,:), mean_result(val-2,:), std_result(val-2,:)] = ARMS_now(tableM{logic_force,7:end}, tableM{logic_force,val});
-    [ARMS_diff_source(val-2), mean_diff_source(val-2), std_diff_source(val-2)] = ARMS_now(tableM{logic_force,3}, tableM{logic_force,val});
+    table_val = tableM(logic_force,:);
+
+    [ARMS_result(val-2,:), mean_result(val-2,:), std_result(val-2,:)] = ARMS_now(table_val{:,7:end}, table_val{:,val});
+    [ARMS_diff_source(val-2), mean_diff_source(val-2), std_diff_source(val-2)] = ARMS_now(table_val{:,3}, table_val{:,val});
+    % Repeated Measures Bland Altman plot
+    BA_result(val-2,:) = -diff(vertcat(arrayfun(@(val1) build_ba(table_val, val, val1, 2),7:14).loa),1,2)';
 end
 
 ARMS_print = sprintfc('%0.2f',[ARMS_diff_source ARMS_result]);
@@ -30,57 +36,90 @@ mean_print = sprintfc('(%0.2f, ',[mean_diff_source mean_result]);
 std_print = sprintfc('%0.2f)',[std_diff_source std_result]);
 total_print = strcat(ARMS_print,mean_print,std_print);
 
-% Check to ensure ARMS values are correctly set
-[ARMS_diff, mean_diff, std_diff] = ARMS_now(table2array(tableM(tableM.Spo2<95,3)),table2array(tableM(tableM.Spo2<95,4:6)));
-ARMS_print_diff = sprintfc('%0.2f',ARMS_diff);
-mean_print_diff = sprintfc('(%0.2f, ',mean_diff);
-std_print_diff = sprintfc('%0.2f)',std_diff);
-total_print_diff = strcat(ARMS_print_diff,mean_print_diff,std_print_diff);
-
 % Sees if caclulated values increase a fct of log(time)
 
-val_list = [ARMS_result;mean_result;std_result];
-mdl_list = arrayfun(@(val) fitlm(log(time_offset), val_list(val,:)), 1:8,'UniformOutput', false);
+val_list = [ARMS_result;mean_result;std_result;BA_result];
+mdl_list = arrayfun(@(val) fitlm(log(time_offset), val_list(val,:)), 1:16,'UniformOutput', false);
 lowest_rsqaured = min(cellfun(@(val) val.Rsquared.Adjusted,mdl_list));
 highest_p = max(cellfun(@(val) val.Coefficients.pValue(2) ,mdl_list));
 
-% Repeated Measures Bland Altman plot:
-logic_force_BA = tableM.Bias_1<=95 & tableM.Bias_1>=75;
-table_BA = tableM(logic_force_BA,[1:3, 5 11 13]);
+coefs =[cellfun(@(val) val.Coefficients.Estimate(1), mdl_list)', cellfun(@(val) val.Coefficients.Estimate(2), mdl_list)'];
 
-ba_ref = build_ba(table_BA, 4, 3, 1);
-ba_1 = build_ba(table_BA, 4, 5, 1);
-ba_5 = build_ba(table_BA, 4, 6, 1);
-
-
-xlim_val =[75,100];
-hold off
-clf
-ax = axes(); 
-pl(1)= plot(ba_5.mean,ba_5.diff,'b.','MarkerSize',3);
-hold on
-pl(2)=plot(ba_1.mean,ba_1.diff,'r.','MarkerSize',3);
-pl(3)=plot(ba_ref.mean,ba_ref.diff,'k.','MarkerSize',3);
-line(repmat(xlim_val',1,2), repmat(ba_5.loa,2,1),'Color', 'b','LineStyle',"-.")
-line(repmat(xlim_val',1,2), repmat(ba_1.loa,2,1),'Color','r','LineStyle',"-.")
-pl(4:5)=line(repmat(xlim_val',1,2), repmat(ba_ref.loa,2,1),'Color','k','LineStyle',"-.");
-line(repmat(xlim_val,1,1), repmat(ba_5.bias,1,2),'Color', 'b','LineStyle',"--")
-line(repmat(xlim_val,1,1), repmat(ba_1.bias,1,2),'Color','r','LineStyle',"--")
-pl(6)=line(repmat(xlim_val,1,1), repmat(ba_ref.bias,1,2),'Color','k','LineStyle',"--");
-xlim(xlim_val)
-ylim([-6.5, 11.5])
-hCopy = copyobj(pl, ax);
-set(hCopy,'XData', NaN', 'YData', NaN)
-hCopy(1).MarkerSize = 15; 
-hCopy(2).MarkerSize = 15; 
-hCopy(3).MarkerSize = 15; 
-xlabel('Average of Measurements')
-ylabel('Difference in Measurements')
-legend(hCopy([3:-1:1 6 4] ), {'No error', '1 min', '5 min', 'Bias','Limits of Agreement'},'Location','northwest')
+offset = 0;
+semilogx(time_offset, ARMS_result,'o')
+ylim([0,4.5])
+xticks(time_offset)
+xticknow={'5 s', '10 s', '15 s', '30 s', '1 min', '2.5 min', '5 min', '10 min'};
+set(gca,'XTickLabel', xticknow);
+title('ARMS vs Deviation Time')
+xlabel ('Deviation Time')
+ylabel ('ARMS')
+hold on;
+set(gca,'ColorOrderIndex',1)
+semilogx(time_offset([1,8]),log(time_offset([1,8])).*coefs((1:4)+offset,2) + coefs((1:4)+offset,1),':')
+legend ({'Baseline', 'Case 1', 'Case 2', 'Case 3'},'Location','southeast')
+hold off;
 set(gcf, 'Position', [680   100   1200   800])
-saveas(gcf,'Bland_Altman_LOA.tiff')
+saveas(gcf,'ARMS.jpg')
 
-print_BA = [(sprintfc('%0.2f ',[ba_5.bias ba_5.loa(2:-1:1)]));
-(sprintfc('%0.2f ',[ba_1.bias ba_1.loa(2:-1:1)]));
-(sprintfc('%0.2f ',[ba_ref.bias ba_ref.loa(2:-1:1)]))];
+offset = 4;
+semilogx(time_offset, mean_result,'o')
+ylim([0,3])
+xticks(time_offset)
+xticknow={'5 s', '10 s', '15 s', '30 s', '1 min', '2.5 min', '5 min', '10 min'};
+set(gca,'XTickLabel', xticknow);
+title('Mean Error vs Deviation Time')
+xlabel ('Deviation Time')
+ylabel ('Mean Error')
+hold on;
+set(gca,'ColorOrderIndex',1)
+semilogx(time_offset([1,8]),log(time_offset([1,8])).*coefs((1:4)+offset,2) + coefs((1:4)+offset,1),':')
+legend ({'Baseline', 'Case 1', 'Case 2', 'Case 3'},'Location','southeast')
+hold off;
+set(gcf, 'Position', [680   100   1200   800])
+saveas(gcf,'Mean.jpg')
 
+offset = 8;
+semilogx(time_offset, std_result,'o')
+ylim([0,4])
+xticks(time_offset)
+xticknow={'5 s', '10 s', '15 s', '30 s', '1 min', '2.5 min', '5 min', '10 min'};
+set(gca,'XTickLabel', xticknow);
+title('SD Error vs Deviation Time')
+xlabel ('Deviation Time')
+ylabel ('SD Error')
+hold on;
+set(gca,'ColorOrderIndex',1)
+semilogx(time_offset([1,8]),log(time_offset([1,8])).*coefs((1:4)+offset,2) + coefs((1:4)+offset,1),':')
+legend ({'Baseline', 'Case 1', 'Case 2', 'Case 3'},'Location','southeast')
+hold off;
+set(gcf, 'Position', [680   100   1200   800])
+saveas(gcf,'SD.jpg')
+
+offset = 12;
+semilogx(time_offset, BA_result,'o')
+ylim([0,15])
+xticks(time_offset)
+xticknow={'5 s', '10 s', '15 s', '30 s', '1 min', '2.5 min', '5 min', '10 min'};
+set(gca,'XTickLabel', xticknow);
+title('BA LOA vs Deviation Time')
+xlabel ('Deviation Time')
+ylabel ('Bland-Altman Limits of Agreement Spread')
+hold on;
+set(gca,'ColorOrderIndex',1)
+semilogx(time_offset([1,8]),log(time_offset([1,8])).*coefs((1:4)+offset,2) + coefs((1:4)+offset,1),':')
+legend ({'Baseline', 'Case 1', 'Case 2', 'Case 3'},'Location','southeast')
+hold off;
+set(gcf, 'Position', [680   100   1200   800])
+saveas(gcf,'BA.jpg')
+
+
+% for AMRS CI:
+
+for val = 3:6
+    logic_force = tableM{:,val}<=95 & tableM{:,val}>=75;
+    temp1 = (tableM{logic_force,end} - tableM{logic_force,val}).^2;
+    m1 = mean(temp1,'omitnan');
+    s1 = 2*std(temp1,'omitnan')/sqrt(sum(~isnan(temp1)));
+    ARMS_ci(val-2,:) = sqrt([m1-s1, m1 + s1]);
+end
