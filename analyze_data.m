@@ -45,6 +45,7 @@ highest_p = max(cellfun(@(val) val.Coefficients.pValue(2) ,mdl_list));
 
 coefs =[cellfun(@(val) val.Coefficients.Estimate(1), mdl_list)', cellfun(@(val) val.Coefficients.Estimate(2), mdl_list)'];
 
+%{ 
 offset = 0;
 semilogx(time_offset, ARMS_result,'o')
 ylim([0,4.5])
@@ -113,7 +114,7 @@ hold off;
 set(gcf, 'Position', [680   100   1200   800])
 saveas(gcf,'BA.jpg')
 
-
+%}
 % for AMRS CI:
 
 for val = 3:6
@@ -123,3 +124,5 @@ for val = 3:6
     s1 = 2*std(temp1,'omitnan')/sqrt(sum(~isnan(temp1)));
     ARMS_ci(val-2,:) = sqrt([m1-s1, m1 + s1]);
 end
+
+fig2;
