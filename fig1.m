@@ -6,7 +6,7 @@ SpO2 = pat(pat_num).Spo2(data_points);
 figure;
 hold on;
 plot(time_val,SpO2)
-xtickformat("hh:mm")
+xtickformat("mm:ss")
 ylim([93,99])
 ylabel('% Saturation')
 xlabel ('Time (MM:SS)')
