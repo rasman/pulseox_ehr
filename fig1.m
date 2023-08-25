@@ -7,7 +7,7 @@ figure;
 sfh1 = subplot(10,10,setdiff(1:99, [10:10:100]));
 hold on;
 plot(time_val,SpO2)
-xtickformat("hh:mm")
+xtickformat("mm:ss")
 ylim([93,99])
 ylabel('% Saturation')
 xlabel ('Time (MM:SS)')
